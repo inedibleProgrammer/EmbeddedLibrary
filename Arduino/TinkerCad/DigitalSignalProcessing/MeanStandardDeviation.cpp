@@ -164,10 +164,20 @@ private: // Registers:
 class Button
 {
 public:
-    
+    #define DEBOUNCE_TIME 20
+
+    typedef enum
+    {
+        released,
+        uncertainPressed,
+        pressed,
+        uncertainReleased
+    } ButtonState;
 public:
     Button(uint8_t* port, uint8_t pin)
-    : r_port(port + 0x20)
+    : m_buttonEvent(false)
+    , m_state(released)
+    , r_port(port + 0x20)
     , m_pin(pin)
     {
         *(r_port - 1) = (*(r_port - 1)) & ~(1 << m_pin); // Set the DDxn to input
@@ -176,28 +186,76 @@ public:
 
     void Process()
     {
-        static uint8_t releasedCount;
+        switch(m_state)
+        {
+            case released:
+                if(!Read())
+                {
+                    m_state = uncertainPressed;
+                }
+                else
+                {
+                    m_buttonEvent = false;
+                }
+                break;
+            case uncertainPressed:
+                {
+                    static uint8_t pressedCount;
+                    if(Read())
+                    {
+                        pressedCount = 0;
+                        m_state = released;
+                    }
+                    else
+                    {
+                        pressedCount++;
+                    }
 
-        if(this->Read())
-        {
-            releasedCount = 0;
-            m_state = false;
-        }
-        else
-        {
-            releasedCount++;
-        }
+                    if(pressedCount >= DEBOUNCE_TIME)
+                    {
+                        m_state = pressed;
+                        m_buttonEvent = true;
+                        pressedCount = 0;
+                    }
+                }
+                break;
+            case pressed:
+                if(Read())
+                {
+                    m_state = uncertainReleased;
+                }
+                break;
+            case uncertainReleased:
+                {
+                    static uint8_t releasedCount;
+                    if(!Read())
+                    {
+                        releasedCount = 0;
+                        m_state = pressed;
+                    }
+                    else
+                    {
+                        releasedCount++;
+                    }
 
-        if(releasedCount >= 50)
-        {
-            m_state = true;
-            releasedCount = 51;
+                    if(releasedCount >= DEBOUNCE_TIME)
+                    {
+                        m_state = released;
+                        releasedCount = 0;
+                    }
+                }
+                break;
+            default:
+                break;
         }
     } // end Process()
 
-    bool GetState()
+    bool GetEvent()
     {
-        return m_state;
+        bool ret;
+        ret = m_buttonEvent;
+        m_buttonEvent = false;
+        return ret;
     }
 private: // Private Methods:
     inline bool Read()
@@ -212,7 +270,8 @@ private: // Private Methods:
         }
     }
 private: // Member variables:
-    bool m_state;
+    bool m_buttonEvent;
+    ButtonState m_state;
     volatile uint8_t m_pin;
 private: // Registers:
     volatile uint8_t * r_port;
@@ -311,7 +370,7 @@ int main()
         // testLed.OneSecondBlink();
         testButton.Process();
 
-        if(!testButton.GetState())
+        if(testButton.GetEvent())
         {
             testLed.Toggle();
             analogResult = analog.StartConversion();
