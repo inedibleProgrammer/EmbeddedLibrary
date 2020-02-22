@@ -164,8 +164,6 @@ private: // Registers:
 class Button
 {
 public:
-    
-public:
     Button(uint8_t* port, uint8_t pin)
     : r_port(port + 0x20)
     , m_pin(pin)
@@ -176,22 +174,30 @@ public:
 
     void Process()
     {
-        static uint8_t releasedCount;
+        static uint8_t onTime;
+        static uint8_t offTime;
 
         if(this->Read())
         {
-            releasedCount = 0;
-            m_state = false;
+            onTime++;
+
+            if(onTime >= 50)
+            {
+                m_state = true;
+                onTime = 51;
+                offTime = 0;
+            }
         }
         else
         {
-            releasedCount++;
-        }
+            offTime++;
 
-        if(releasedCount >= 50)
-        {
-            m_state = true;
-            releasedCount = 51;
+            if(offTime >= 50)
+            {
+                m_state = false;
+                offTime = 51;
+                onTime = 0;
+            }
         }
     } // end Process()
 
