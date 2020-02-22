@@ -4,6 +4,9 @@
 
     Date: 11 Jan. 2020
 */
+//Include files____________________________________________________________________
+#include <stdint.h>
+#include <avr/interrupt.h>
 
 //Classes__________________________________________________________________________
 /*
@@ -25,29 +28,29 @@ public: // Methods:
         m_taskLoop = false;
 
         // Assign the registers their addresses:
-        ControlA = (uint8_t*)(0x2A + 0x20); // TCCR0A
-        ControlB = (uint8_t*)(0x33 + 0x20); // TCCR0B
-        Counter  = (uint8_t*)(0x23 + 0x20); // TCNT0
-        OutputCompareA = (uint8_t*)(0x29 + 0x20); // OCR0A
-        OutputCompareB = (uint8_t*)(0x28 + 0x20); // OCR0B
-        InterruptMask  = (uint8_t*)(0x39 + 0x20); // TIMSK
+        r_controlA = (uint8_t*)(0x2A + 0x20); // TCCR0A
+        r_controlB = (uint8_t*)(0x33 + 0x20); // TCCR0B
+        r_counter  = (uint8_t*)(0x23 + 0x20); // TCNT0
+        r_outputCompareA = (uint8_t*)(0x29 + 0x20); // OCR0A
+        r_outputCompareB = (uint8_t*)(0x28 + 0x20); // OCR0B
+        r_interruptMask  = (uint8_t*)(0x39 + 0x20); // TIMSK
 
         // CTC Mode: (WGM0[2:0] = 2)
-        (*ControlA) = (*ControlA) | (1 << 1); // Set WGM01
+        (*r_controlA) = (*r_controlA) | (1 << 1); // Set WGM01
 
         // Set OCR0A to 125 to get the 1 ms interrupt period
-        (*OutputCompareA) = 125;
+        (*r_outputCompareA) = 125;
 
         // Set OC0A on Compare Match
-        // (*ControlA) = (*ControlA) | (1 << 7); // Set COM0A1
-        // (*ControlA) = (*ControlA) | (1 << 6); // Set COM0A0
+        // (*r_controlA) = (*r_controlA) | (1 << 7); // Set COM0A1
+        // (*r_controlA) = (*r_controlA) | (1 << 6); // Set COM0A0
 
         // Prescale: 1/64
-        (*ControlB) = (*ControlB) | (1 << 0); // Set CS00
-        (*ControlB) = (*ControlB) | (1 << 1); // Set CS01
+        (*r_controlB) = (*r_controlB) | (1 << 0); // Set CS00
+        (*r_controlB) = (*r_controlB) | (1 << 1); // Set CS01
 
         // Enable compare match interrupt
-        (*InterruptMask) = (*InterruptMask) | (1 << 4); // Set OCIE0A.
+        (*r_interruptMask) = (*r_interruptMask) | (1 << 4); // Set OCIE0A.
 
     }
     void WaitTaskLoop()
@@ -64,12 +67,12 @@ private: // Member Variables:
     uint16_t       m_counter;
     volatile bool  m_taskLoop;
 private: // Registers:
-    volatile uint8_t * ControlA;
-    volatile uint8_t * ControlB;
-    volatile uint8_t * Counter;
-    volatile uint8_t * OutputCompareA;
-    volatile uint8_t * OutputCompareB;
-    volatile uint8_t * InterruptMask;
+    volatile uint8_t * r_controlA;
+    volatile uint8_t * r_controlB;
+    volatile uint8_t * r_counter;
+    volatile uint8_t * r_outputCompareA;
+    volatile uint8_t * r_outputCompareB;
+    volatile uint8_t * r_interruptMask;
 };
 Timer0Controller & Timer0Controller::Instance()
 {
@@ -79,6 +82,25 @@ Timer0Controller & Timer0Controller::Instance()
 
 // end Timer0Controller
 
+
+/*
+    Name: Analog
+    Description:
+        * 
+*/
+class Analog
+{
+public:
+private:
+private: // Registers:
+    volatile uint8_t  * r_multiplexerSelection;
+    volatile uint8_t  * r_controlStatusA;
+    volatile uint16_t * r_data;
+    volatile uint8_t  * r_controlStatusB;
+    volatile uint8_t  * r_digitalInputDisable;
+
+};
+
 /*
     Name: Button
     Description: Simple method of controlling a button.
@@ -87,12 +109,11 @@ class Button
 {
 public:
     Button(uint8_t* port, uint8_t pin)
-    : m_port(port + 0x20)
+    : r_port(port + 0x20)
     , m_pin(pin)
     {
-        // Set the DDxn to input:
-        *(m_port - 1) = (*(m_port - 1)) & ~(1 << m_pin);
-        *(m_port) = (*m_port) | (1 << m_pin); // Activate pullup resistor
+        *(r_port - 1) = (*(r_port - 1)) & ~(1 << m_pin); // Set the DDxn to input
+        *(r_port) = (*r_port) | (1 << m_pin); // Activate pullup resistor
     }
 
     void Process()
@@ -130,7 +151,7 @@ public:
 private: // Private Methods:
     bool Read()
     {
-        if((*(m_port - 2) & (1 << m_pin)) == (1 << m_pin)) // Read the PIN register
+        if((*(r_port - 2) & (1 << m_pin)) == (1 << m_pin)) // Read the PIN register
         {
             return true;
         }
@@ -141,10 +162,9 @@ private: // Private Methods:
     }
 private: // Member variables:
     bool m_state;
-
+    volatile uint8_t m_pin;
 private: // Registers:
-    volatile uint8_t* m_port;
-    volatile uint8_t  m_pin;
+    volatile uint8_t * r_port;
 };
 // end Button
 
@@ -162,18 +182,18 @@ class Led
 public:
     Led(uint8_t * port, uint8_t pin)
     : m_state(false)
-    , m_port(port + 0x20)
+    , r_port(port + 0x20)
     , m_pin(pin)
     {
         // Set the DDxn to output:
-        *(m_port - 1) = (*(m_port - 1)) | (1 << m_pin);
+        *(r_port - 1) = (*(r_port - 1)) | (1 << m_pin);
 
         // Initialize the port to off:
-        (*m_port) = (*m_port) & ~(1 << m_pin);
+        (*r_port) = (*r_port) & ~(1 << m_pin);
     }
     void Toggle()
     {
-        (*m_port) = (*m_port) ^ (1 << m_pin);
+        (*r_port) = (*r_port) ^ (1 << m_pin);
     }
     void Activate()
     {
@@ -183,7 +203,7 @@ public:
         }
         else
         {
-            (*m_port) = (*m_port) | (1 << m_pin);
+            (*r_port) = (*r_port) | (1 << m_pin);
             m_state = true;
         }
     }
@@ -195,7 +215,7 @@ public:
         }
         else
         {
-            (*m_port) = (*m_port) & ~(1 << m_pin);
+            (*r_port) = (*r_port) & ~(1 << m_pin);
             m_state = false;
         }
     }
@@ -213,7 +233,7 @@ public:
 private: // Member variables:
     bool m_state;
 private: // Registers:
-    volatile uint8_t* m_port;
+    volatile uint8_t* r_port;
     volatile uint8_t  m_pin;
 };
 // end Led
@@ -223,7 +243,7 @@ private: // Registers:
 //Function Definitions______________________________________________________________
 int main()
 {
-    Timer0Controller::Instance().Init();
+    Timer0Controller::Instance().Init(); // Only one can be created and used.
 
     // Enable Interrupts:
     sei();
@@ -237,19 +257,15 @@ int main()
         // testLed.OneSecondBlink();
         testButton.Process();
 
-        if(testButton.GetState())
+        if(!testButton.GetState())
         {
-            testLed.Activate();
-        }
-        else
-        {
-            testLed.Deactivate();
+            testLed.Toggle();
         }
 
         Timer0Controller::Instance().WaitTaskLoop();
     }
     return 0;
-}
+} // end int main()
 
 //Interrupt Service Routines________________________________________________________
 ISR(TIMER0_COMPA_vect)
