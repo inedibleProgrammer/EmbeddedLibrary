@@ -15,6 +15,7 @@
     * This class is a singleton to control
     the timer0 module of the ATTiny45.
     * Some functionality is partially unnecessary.
+    * This timer acts as a 1 ms counter.
 */
 class Timer0Controller
 {
@@ -74,6 +75,7 @@ private: // Registers:
     volatile uint8_t * r_outputCompareB;
     volatile uint8_t * r_interruptMask;
 };
+/* I needed to bring this method out for TinkerCAD to compile it correctly. */
 Timer0Controller & Timer0Controller::Instance()
 {
     static Timer0Controller instance;
@@ -91,13 +93,67 @@ Timer0Controller & Timer0Controller::Instance()
 class Analog
 {
 public:
-private:
+    Analog()
+    {
+        /* Initialize registers: */
+        r_multiplexerSelection = (uint8_t*)(0x07 + 0x20);
+        r_controlStatusA       = (uint8_t*)(0x06 + 0x20);
+        r_dataH                = (uint8_t*)(0x05 + 0x20);
+        r_dataL                = (uint8_t*)(0x04 + 0x20);
+        r_controlStatusB       = (uint8_t*)(0x03 + 0x20);
+        r_digitalInputDisable  = (uint8_t*)(0x14 + 0x20);
+
+        /* Set voltage reference to Vcc: */
+            // Vcc is set by default, so do nothing
+
+        /* Set single channel: */
+            // By default, ADC5 (PB0), is selected, so do nothing
+
+        /* Set the ADEN bit in the ADCSRA register to enable the ADC */
+        (*r_controlStatusA) = (*r_controlStatusA) | (1 << 7);
+    }
+
+    uint16_t StartConversion()
+    {
+        uint16_t adcResult = 0;
+
+        /* 
+            * Start the conversion by setting the ADC Start Conversion Bit (ADSC) 
+                * This bit stays high for as long as the conversion, and is cleared
+                by hardware when the conversion is over.
+                * Use IsConversionFinished() to detect if the bit has been cleared.
+        */
+        (*r_controlStatusA) = (*r_controlStatusA) | (1 << 6);
+
+        /* Wait until conversion is finished. */
+        while(!IsConversionFinished())
+        {
+            // Do nothing
+        }
+
+        /* Merge ADCH and ADCL into one register: */
+        adcResult = (*r_dataH << 8) | (*r_dataL); 
+    }
+
+private: // Private methods:
+    bool IsConversionFinished()
+    {
+        /* 
+            * Test the ADC Start Conversion bit.
+                * if it is set, return false.
+                * if it is cleared, return true.
+        */
+        return ( (*r_controlStatusA) & (1 << 6) ) == 0;
+    }
+
+private: // Member variables:
 private: // Registers:
-    volatile uint8_t  * r_multiplexerSelection;
-    volatile uint8_t  * r_controlStatusA;
-    volatile uint16_t * r_data;
-    volatile uint8_t  * r_controlStatusB;
-    volatile uint8_t  * r_digitalInputDisable;
+    volatile uint8_t * r_multiplexerSelection;  /* ADMUX */
+    volatile uint8_t * r_controlStatusA;        /* ADCSRA */
+    volatile uint8_t * r_dataH;                 /* ADCH */
+    volatile uint8_t * r_dataL;                 /* ADCH */
+    volatile uint8_t * r_controlStatusB;        /* ADCSRB */
+    volatile uint8_t * r_digitalInputDisable;   /* DIDR0 */
 
 };
 
@@ -221,7 +277,7 @@ public:
     }
     void OneSecondBlink()
     {
-        static int blinkTime;
+        static uint16_t blinkTime;
 
         if(blinkTime >= 1000)
         {
@@ -232,9 +288,9 @@ public:
     }
 private: // Member variables:
     bool m_state;
+    volatile uint8_t m_pin;
 private: // Registers:
     volatile uint8_t* r_port;
-    volatile uint8_t  m_pin;
 };
 // end Led
 
@@ -249,9 +305,12 @@ int main()
     sei();
 
     // Create a test Led:
-    Led testLed((uint8_t*)0x18, 2); // PORTB, PIN0
+    Led testLed((uint8_t*)0x18, 2); // PORTB, PIN2
     Button testButton((uint8_t*)0x18, 1); // PORTB, PIN1
 
+    Analog analog;
+    uint16_t analogResult;
+    uint8_t breakpointDummy = 0;
     while(1)
     {
         // testLed.OneSecondBlink();
@@ -260,6 +319,8 @@ int main()
         if(!testButton.GetState())
         {
             testLed.Toggle();
+            analogResult = analog.StartConversion();
+            breakpointDummy = 1;
         }
 
         Timer0Controller::Instance().WaitTaskLoop();
@@ -272,8 +333,3 @@ ISR(TIMER0_COMPA_vect)
 {
     Timer0Controller::Instance().InterruptRoutine();
 }
-
-// ISR(TIMER0_OVF_vect)
-// {
-//     Timer0Controller::Instance().InterruptRoutine();
-// }
