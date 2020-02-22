@@ -19,9 +19,11 @@
 */
 class Timer0Controller
 {
-public: // Singleton Setup:
+private: // Singleton Setup:
     Timer0Controller(){}
+public: 
     static Timer0Controller & Instance();
+
 public: // Methods:
     void Init()
     {
@@ -81,19 +83,22 @@ Timer0Controller & Timer0Controller::Instance()
     static Timer0Controller instance;
     return instance;
 }
-
 // end Timer0Controller
 
 
 /*
     Name: Analog
     Description:
-        * 
+        * This class is a singleton.
 */
 class Analog
 {
+private:
+    Analog(){}
 public:
-    Analog()
+    static Analog & Instance();
+public:
+    void Init()
     {
         /* Initialize registers: */
         r_multiplexerSelection = (uint8_t*)(0x07 + 0x20);
@@ -156,10 +161,18 @@ private: // Registers:
     volatile uint8_t * r_digitalInputDisable;   /* DIDR0 */
 
 };
+/* I needed to bring this method out for TinkerCAD to compile it correctly. */
+Analog & Analog::Instance()
+{
+    static Analog instance;
+    return instance;
+}
+// end Analog
 
 /*
     Name: Button
     Description: Simple method of controlling a button.
+    * An event is set when the button goes from uncertainPressed -> pressed
 */
 class Button
 {
@@ -353,28 +366,66 @@ private: // Registers:
 //Function Definitions______________________________________________________________
 int main()
 {
-    Timer0Controller::Instance().Init(); // Only one can be created and used.
+    #define NUM_TRIALS 10
+
+    Timer0Controller::Instance().Init();
+    Analog::Instance().Init();
 
     // Enable Interrupts:
     sei();
 
-    // Create a test Led:
-    Led testLed((uint8_t*)0x18, 2); // PORTB, PIN2
-    Button testButton((uint8_t*)0x18, 1); // PORTB, PIN1
+    Led setFinishedLed((uint8_t*)0x18, 2); // PORTB, PIN2
+    Button sampleStartButton((uint8_t*)0x18, 1); // PORTB, PIN1
 
-    Analog analog;
-    uint16_t analogResult;
     uint8_t breakpointDummy = 0;
+    uint8_t currentTrial;
+    bool collectingSamples = true;
+    uint16_t experimentSamples[NUM_TRIALS];
+
+    for(int i = 0; i < NUM_TRIALS; i++)
+    {
+        experimentSamples[i] = 0;
+    }
+
     while(1)
     {
-        // testLed.OneSecondBlink();
-        testButton.Process();
+        sampleStartButton.Process();
 
-        if(testButton.GetEvent())
+        if(collectingSamples)
         {
-            testLed.Toggle();
-            analogResult = analog.StartConversion();
-            breakpointDummy = 1;
+            if(sampleStartButton.GetEvent())
+            {
+                experimentSamples[currentTrial] = Analog::Instance().StartConversion();
+                currentTrial++;
+            }
+            if(currentTrial >= NUM_TRIALS)
+            {
+                collectingSamples = false;
+            }
+        }
+        else
+        {
+            setFinishedLed.Activate();
+            if(sampleStartButton.GetEvent()) 
+            {
+                setFinishedLed.Deactivate();
+                // Calculate the mean:
+                uint32_t total = 0;
+                float average = 0;
+                for(int i = 0; i < NUM_TRIALS; i++)
+                {
+                    total = total + experimentSamples[i];
+                }
+
+                average = ((float)total) / ((float)NUM_TRIALS);
+
+
+                
+                // Restart the experiment:
+                collectingSamples = true;
+                currentTrial = 0;
+                // The array does not need to be initialized to 0 because we're going to overwrite every value anyways
+            }
         }
 
         Timer0Controller::Instance().WaitTaskLoop();
@@ -387,3 +438,51 @@ ISR(TIMER0_COMPA_vect)
 {
     Timer0Controller::Instance().InterruptRoutine();
 }
+
+// Garbage:
+#if 0
+        // testLed.OneSecondBlink();
+        testButton.Process();
+
+        if(testButton.GetEvent())
+        {
+            testLed.Toggle();
+            analogResult = Analog::Instance().StartConversion();
+            breakpointDummy = 1;
+        }
+
+    typedef enum
+    {
+        Start,
+        CollectSamples,
+        Calculate,
+        Finished
+    } ExperimentStates;
+
+
+                switch(state)
+        {
+            case Start:
+                if(experimentStartButton.GetEvent())
+                {
+                    state = CollectSamples;
+                }
+                break;
+            case CollectSamples:
+                {
+                    static uint8_t nMillisecondCounter;
+
+                    if(nMillisecondCounter >= 200)
+                    {
+
+                    }
+                }
+                break;
+            case Calculate:
+                break;
+            case Finished:
+                break;
+            default:
+                break;
+        }
+#endif
