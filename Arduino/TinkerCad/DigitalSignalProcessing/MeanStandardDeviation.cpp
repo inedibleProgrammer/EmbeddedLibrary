@@ -2,7 +2,7 @@
     Description: This is me testing grabbing the mean and standard deviation from something
     using the ATTiny45.
 
-    Date: 11 Jan. 2020
+    Date: 22 Feb. 2020
 */
 //Include files____________________________________________________________________
 #include <stdint.h>
@@ -21,7 +21,7 @@ class Timer0Controller
 {
 private: // Singleton Setup:
     Timer0Controller(){}
-public: 
+public: // Singleton Setup:
     static Timer0Controller & Instance();
 
 public: // Methods:
@@ -93,9 +93,9 @@ Timer0Controller & Timer0Controller::Instance()
 */
 class Analog
 {
-private:
+private: // Singleton Setup:
     Analog(){}
-public:
+public: // Singleton Setup:
     static Analog & Instance();
 public:
     void Init()
@@ -299,7 +299,6 @@ private: // Registers:
         * Port: The address of the Port according to the datasheet. (the class adds 0x20 for you)
         * Pin:  The relevant pin
 */
-
 class Led
 {
 public:
@@ -389,7 +388,7 @@ int main()
 
     while(1)
     {
-        sampleStartButton.Process();
+        sampleStartButton.Process(); // Poll to update button state
 
         if(collectingSamples)
         {
@@ -419,8 +418,6 @@ int main()
 
                 average = ((float)total) / ((float)NUM_TRIALS);
 
-
-                
                 // Restart the experiment:
                 collectingSamples = true;
                 currentTrial = 0;
@@ -437,52 +434,4 @@ int main()
 ISR(TIMER0_COMPA_vect)
 {
     Timer0Controller::Instance().InterruptRoutine();
-}
-
-// Garbage:
-#if 0
-        // testLed.OneSecondBlink();
-        testButton.Process();
-
-        if(testButton.GetEvent())
-        {
-            testLed.Toggle();
-            analogResult = Analog::Instance().StartConversion();
-            breakpointDummy = 1;
-        }
-
-    typedef enum
-    {
-        Start,
-        CollectSamples,
-        Calculate,
-        Finished
-    } ExperimentStates;
-
-
-                switch(state)
-        {
-            case Start:
-                if(experimentStartButton.GetEvent())
-                {
-                    state = CollectSamples;
-                }
-                break;
-            case CollectSamples:
-                {
-                    static uint8_t nMillisecondCounter;
-
-                    if(nMillisecondCounter >= 200)
-                    {
-
-                    }
-                }
-                break;
-            case Calculate:
-                break;
-            case Finished:
-                break;
-            default:
-                break;
-        }
-#endif
+} // end ISR(TIMER0_COMPA_vect)
